@@ -13,13 +13,23 @@ import gustavo.com.ceep.model.Note
 import gustavo.com.ceep.webClient.NoteWebClient
 
 import kotlinx.android.synthetic.main.form_note.view.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlin.coroutines.CoroutineContext
 
 class NoteDialog(private val viewGroup: ViewGroup,
-                 private val context: Context) {
+                 private val context: Context): CoroutineScope {
 
     private val createdView = createView()
     private val titleField = createdView.form_note_title
     private val descriptionField = createdView.form_note_description
+
+    private var job: Job = Job()
+
+    override val coroutineContext: CoroutineContext
+        get() = Dispatchers.Main + job
 
     fun show(created: (createdNote: Note) -> Unit){
         AlertDialog.Builder(context)
@@ -29,11 +39,15 @@ class NoteDialog(private val viewGroup: ViewGroup,
                 val title = titleField.text.toString()
                 val description = descriptionField.text.toString()
                 val note = Note(title = title, description = description)
-                NoteWebClient().insert(note, {
-                    created(it)
-                },{
-                    Toast.makeText(context, "Falha ao salvar nota", Toast.LENGTH_LONG).show()
-                })
+
+                launch(Dispatchers.Main){
+                    NoteWebClient().insert(note, {
+                        created(it)
+                    },{
+                        Toast.makeText(context, "Falha ao salvar nota", Toast.LENGTH_LONG).show()
+                    })
+                    job.cancel()
+                }
             }
             .show()
     }
@@ -45,7 +59,7 @@ class NoteDialog(private val viewGroup: ViewGroup,
                 false)
     }
 
-    fun alter(note: Note,altered: (altered: Note)  -> Unit){
+    fun alter(note: Note,altered: (altered: Note)  -> Unit, configuration: () -> Unit){
         titleField.setText(note.title)
         descriptionField.setText(note.description)
         AlertDialog.Builder(context)
@@ -55,13 +69,15 @@ class NoteDialog(private val viewGroup: ViewGroup,
                 val title = titleField.text.toString()
                 val description = descriptionField.text.toString()
                 val alteredNote = note.copy(title = title, description = description)
-                NoteWebClient().alter(alteredNote, {
-                    altered(it)
-                }, {
-                    Toast.makeText(context, "Falha ao alterar nota", Toast.LENGTH_LONG).show()
-                    Log.d("TAG",it.message)
-                })
-
+                launch(Dispatchers.Main) {
+                    NoteWebClient().alter(alteredNote, {
+                        altered(it)
+                    }, {
+                        Toast.makeText(context, "Falha ao alterar nota", Toast.LENGTH_LONG).show()
+                    })
+                    configuration()
+                    job.cancel()
+                }
             }
             .show()
     }

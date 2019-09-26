@@ -11,23 +11,39 @@ import gustavo.com.ceep.adapter.NoteListAdapter
 import gustavo.com.ceep.dialog.NoteDialog
 import gustavo.com.ceep.model.Note
 import kotlinx.android.synthetic.main.activity_note_list.*
+import kotlinx.coroutines.*
 import java.util.logging.Logger
+import kotlin.coroutines.CoroutineContext
 
-class NoteListActivity : AppCompatActivity() {
+class NoteListActivity : AppCompatActivity(), CoroutineScope {
 
     private val notes: MutableList<Note> = mutableListOf()
+
+    private var job: Job = Job()
+
+    override val coroutineContext: CoroutineContext
+        get() = Dispatchers.Main + job
+
+    override fun onDestroy() {
+        super.onDestroy()
+        job.cancel()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_note_list)
+        Toast.makeText(this@NoteListActivity, "Teste", Toast.LENGTH_LONG).show()
 
-        NoteWebClient().list({
-            notes.addAll(it)
-            configureList()
-        },{
-            Toast.makeText(this, it.message, Toast.LENGTH_LONG).show()
-            Log.d("TAG",it.message)
-        })
+        launch{
+            NoteWebClient().list({
+                notes.addAll(it)
+                configureList()
+            },{
+                Toast.makeText(this@NoteListActivity, "Não foi possivel recuperar a lista", Toast.LENGTH_LONG).show()
+//                Log.d("ERROR",it.fillInStackTrace().toString())
+            })
+        }
+
 
         fab_add_note.setOnClickListener {
             NoteDialog(window.decorView as ViewGroup,
@@ -52,10 +68,11 @@ class NoteListActivity : AppCompatActivity() {
         val recyclerView = note_list_recyclerview
         recyclerView.adapter = NoteListAdapter(notes, this) {note, position ->
 
-            NoteDialog(window.decorView as ViewGroup, this).alter(note) {
+            NoteDialog(window.decorView as ViewGroup, this).alter(note, {
                 notes[position] = it
-                configureList()
-            }
+//                configureList()
+            },{configureList()})
+
         }
         val layoutManager = StaggeredGridLayoutManager(
             2, StaggeredGridLayoutManager.VERTICAL)
